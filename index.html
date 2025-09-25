@@ -1,0 +1,264 @@
+<!-- 🔽 Inizio del file HTML -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soldato in Fuga</title>
+    <style>
+        /* Tutti i tuoi stili CSS restano invariati */
+        /* ⏩ ... (omesso per brevità, usa il tuo CSS completo già fornito sopra) ... */
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- Grattacieli in fiamme (uguali al tuo codice) -->
+        <!-- ... -->
+
+        <!-- UI aggiornata -->
+        <div id="gameUI">
+            <div>Distanza: <span id="distance">0</span> km / 1.000.000.000 km</div>
+            <div>Tempo: <span id="timer">60</span>s</div>
+            <div id="lives">
+                <div class="life"></div>
+                <div class="life"></div>
+                <div class="life"></div>
+            </div>
+        </div>
+
+        <div id="progressBar">
+            <div id="progress"></div>
+        </div>
+
+        <div id="instructions">Premi SPAZIO per saltare le macchine in fiamme!<br>Raggiungi la stazione militare!</div>
+
+        <!-- Player -->
+        <div id="player">
+            <div class="soldier"></div>
+        </div>
+
+        <div id="ground"></div>
+
+        <!-- Schermate -->
+        <div id="gameOver">
+            <h2>MISSIONE FALLITA!</h2>
+            <p id="failReason">Tempo scaduto!</p>
+            <button class="btn" onclick="restartGame()">Riprova Missione</button>
+        </div>
+
+        <div id="victory">
+            <h2>MISSIONE COMPLETATA!</h2>
+            <p>Hai raggiunto la stazione militare!</p>
+            <p>Tempo rimanente: <span id="finalTime">0</span>s</p>
+            <button class="btn" onclick="restartGame()">Nuova Missione</button>
+        </div>
+    </div>
+
+    <!-- 🔽 SCRIPT JAVASCRIPT MODIFICATO -->
+    <script>
+        let player = document.getElementById('player');
+        let gameContainer = document.getElementById('gameContainer');
+        let distanceElement = document.getElementById('distance');
+        let timerElement = document.getElementById('timer');
+        let progressElement = document.getElementById('progress');
+        let livesElements = document.querySelectorAll('.life');
+        let gameOverScreen = document.getElementById('gameOver');
+        let victoryScreen = document.getElementById('victory');
+        let failReasonElement = document.getElementById('failReason');
+        let finalTimeElement = document.getElementById('finalTime');
+
+        let isJumping = false;
+        let gameRunning = true;
+        let distance = 0;
+        const TARGET_DISTANCE = 1000000000000; // 1 miliardo di chilometri in metri
+        let timeLeft = 60;
+        let lives = 3;
+        let gameSpeed = 3;
+        let obstacles = [];
+        let obstacleSpawnTimer = 0;
+        let isInvulnerable = false;
+
+        // Timer del gioco
+        let gameTimer = setInterval(() => {
+            if (gameRunning && timeLeft > 0) {
+                timeLeft--;
+                timerElement.textContent = timeLeft;
+
+                if (timeLeft <= 0) {
+                    gameOver("Tempo scaduto!");
+                }
+            }
+        }, 1000);
+
+        // Controlli
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space' && gameRunning) {
+                e.preventDefault();
+                jump();
+            }
+        });
+
+        gameContainer.addEventListener('click', function() {
+            if (gameRunning) {
+                jump();
+            }
+        });
+
+        function jump() {
+            if (!isJumping) {
+                isJumping = true;
+                player.classList.add('jumping');
+
+                setTimeout(() => {
+                    player.classList.remove('jumping');
+                    isJumping = false;
+                }, 600);
+            }
+        }
+
+        function createObstacle() {
+            let obstacle = document.createElement('div');
+            obstacle.className = 'car-obstacle';
+            obstacle.style.right = '-60px';
+
+            let flame = document.createElement('div');
+            flame.className = 'car-flame';
+            obstacle.appendChild(flame);
+
+            gameContainer.appendChild(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        function moveObstacles() {
+            obstacles.forEach((obstacle, index) => {
+                let currentRight = parseInt(obstacle.style.right) || 0;
+                obstacle.style.right = (currentRight + gameSpeed) + 'px';
+
+                if (currentRight > 950) {
+                    obstacle.remove();
+                    obstacles.splice(index, 1);
+                }
+            });
+        }
+
+        function updateProgress() {
+            // Aumenta distanza più velocemente (simulazione viaggio lungo)
+            distance += gameSpeed * 1000000; // Avanza di 1.000 km per frame
+
+            // Mostra distanza in km
+            distanceElement.textContent = Math.floor(distance / 1000);
+
+            let progress = (distance / TARGET_DISTANCE) * 100;
+            progressElement.style.width = Math.min(progress, 100) + '%';
+
+            // Aumenta difficoltà gradualmente
+            if (distance % 100000000000 < gameSpeed * 1000000 && gameSpeed < 10) {
+                gameSpeed += 0.3;
+            }
+
+            if (distance >= TARGET_DISTANCE) {
+                victory();
+            }
+        }
+
+        function checkCollision() {
+            if (isInvulnerable) return;
+
+            let playerRect = player.getBoundingClientRect();
+            let playerBottom = parseInt(window.getComputedStyle(player).bottom);
+            let playerIsJumping = playerBottom > 80;
+
+            obstacles.forEach(obstacle => {
+                let obstacleRect = obstacle.getBoundingClientRect();
+                let obstacleRight = parseInt(obstacle.style.right);
+                let obstacleLeft = 900 - obstacleRight - 50;
+
+                if (obstacleLeft < 125 && obstacleLeft > 75) {
+                    if (!playerIsJumping || playerBottom < 120) {
+                        hitObstacle();
+                        obstacle.remove();
+                        obstacles.splice(obstacles.indexOf(obstacle), 1);
+                    }
+                }
+            });
+        }
+
+        function hitObstacle() {
+            if (isInvulnerable) return;
+
+            lives--;
+            livesElements[lives].classList.add('lost');
+
+            let explosion = document.createElement('div');
+            explosion.className = 'death-effect';
+            explosion.style.left = player.style.left;
+            explosion.style.bottom = player.style.bottom;
+            gameContainer.appendChild(explosion);
+
+            setTimeout(() => explosion.remove(), 500);
+
+            if (lives <= 0) {
+                gameOver("Tutte le vite perse!");
+            } else {
+                isInvulnerable = true;
+                player.classList.add('respawn-effect');
+
+                setTimeout(() => {
+                    isInvulnerable = false;
+                    player.classList.remove('respawn-effect');
+                }, 1000);
+            }
+        }
+
+        function gameOver(reason) {
+            gameRunning = false;
+            clearInterval(gameTimer);
+            failReasonElement.textContent = reason;
+            gameOverScreen.style.display = 'block';
+        }
+
+        function victory() {
+            gameRunning = false;
+            clearInterval(gameTimer);
+            finalTimeElement.textContent = timeLeft;
+            victoryScreen.style.display = 'block';
+        }
+
+        function restartGame() {
+            gameRunning = true;
+            distance = 0;
+            timeLeft = 60;
+            lives = 3;
+            gameSpeed = 3;
+            isJumping = false;
+            isInvulnerable = false;
+            obstacleSpawnTimer = 0;
+
+            distanceElement.textContent = '0';
+            timerElement.textContent = '60';
+            progressElement.style.width = '0%';
+            gameOverScreen.style.display = 'none';
+            victoryScreen.style.display = 'none';
+            player.classList.remove('jumping', 'respawn-effect');
+            livesElements.forEach(life => life.classList.remove('lost'));
+
+            obstacles.forEach(obstacle => obstacle.remove());
+            obstacles = [];
+
+            gameTimer = setInterval(() => {
+                if (gameRunning && timeLeft > 0) {
+                    timeLeft--;
+                    timerElement.textContent = timeLeft;
+
+                    if (timeLeft <= 0) {
+                        gameOver("Tempo scaduto!");
+                    }
+                }
+            }, 1000);
+        }
+
+        // Game loop principale
+        function gameLoop() {
+            if (gameRunning) {
+                obstacleSpawnTimer++;
+                let spawnRate
